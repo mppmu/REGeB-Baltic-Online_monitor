@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+never_stop=0
+base_directory_name=/remote/ceph2/group/gedet/data/lab/2018/2018-06-22_8bfc8699_lm_regeb_in_new_lab
+#
+# source ${base_directory_name}/setup_root5.sh
+#
+while [ $never_stop -le 2 ]; do
+#
+# ---> first gzip all .dat files (if any)
+#
+gzip ${base_directory_name}/raw_data/*.dat
+#
+# ---> first find out the latest .dat file in directory /remote/ceph/user/x/xliu/work/REGes/struck_daq
+#
+input_gzipped_dat_filename=`ls -t ${base_directory_name}/raw_data/*.dat.gz | head -1`
+echo now process $input_gzipped_dat_filename
+gzip -d $input_gzipped_dat_filename
+input_dat_filename=${input_gzipped_dat_filename%\.gz}
+#
+# ---> get the date name
+#
+#general_option=${input_dat_filename:115:15}
+general_option=${input_dat_filename:116:15}
+echo time-tag $general_option
+#
+#---> prepare all the file names
+#
+output_convert_log_filename=log.${general_option}.convert.txt
+#echo $output_convert_log_filename
+output_root_filename=h.regeb.${general_option}.root
+#echo $output_root_filename
+output_root_log_filename=log.${general_option}.create_energy.txt
+#echo $output_root_log_filename
+#
+# ---> convert binary to root ntuple
+#
+\rm htest.root
+${base_directory_name}/struck_convertor/struck_binary_convertor.exe $input_dat_filename >& logs/${output_convert_log_filename}
+mv htest.root root_ntuples/${output_root_filename}
+#
+# ---> create macro file
+#
+rm run_create_ReGeB_Energy_Spectrum.C
+cat >> run_create_ReGeB_Energy_Spectrum.C <<EOA
+.L SegBEGeK2ESA.cxx+
+TChain ch("data");
+ch.Add("root_ntuples/${output_root_filename}");
+ch.Process("Create_Energy_Spectrum.C+","${general_option}");
+EOA
+root -l -b < run_create_ReGeB_Energy_Spectrum.C >& logs/${output_root_log_filename}
+#
+#---> mv the plots to right place
+#
+mv plot_regeb_${general_option}.png plots/.
+mv plot_regeb_latest.png /remote/WWW/GeDet/REGeBMonitor/.
+#
+#---> gzip dat file again
+#
+gzip ${input_dat_filename}
+#
+#---> wait 60 minutes
+#
+sleep 60m
+#
+#---> the end
+#
+done
